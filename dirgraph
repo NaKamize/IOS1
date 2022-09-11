@@ -1,0 +1,108 @@
+#!/bin/sh
+
+#IOS Uloha 1
+#Author: Jozef Makis (xmakis00@fit.vutbr.cz)
+
+POSIXLY_CORRECT=yes
+NORMALIZATION=false 	#aby sa nespustala nomralizacia pokial to nieje ako prepinac
+IGNORE="a^" 		#nemalo by sa zhodovat s nicim, invertuje sa to potom grep -v, takze by to malo najst vsetko
+ERROR=0			#premenna pre porovnavanie ci je error
+
+napoveda()
+{
+        echo "Pouzitie: dirgraph [-i FILE_ERE] [-n] [DIR]" >&2
+        echo "Bez zadaneho adresara sa preskuma aktualny adresar" >&2
+        echo "Prepinac: -i ignoruje subory a adresare, ktorych nazov zodpoveda rozsirenemu regularnemu vyrazu FILE_ERE" >&2
+        echo "Prepinac: -n nastavuje normalizaciu historigramu" >&2
+}
+
+#spracovanie prepinacov -i a -n, pokial je zadany iny prepinac vypise napovedu
+while getopts :i:n o; do
+        case "$o" in
+                i)	IGNORE=$OPTARG;;
+                n)	NORMALIZATION=true;;
+                *)	napoveda
+                        exit 1;;
+        esac
+done
+
+shift $(($OPTIND - 1))
+
+#ak nebol zadany adresar preda do premennej DIR aktualny adresar
+if [ -z "$*" ]; then
+        DIR=$(pwd)
+#ak je neplatny adresar vypise chybu
+elif [ ! -d "$*" ]; then
+        echo "Zadal si nespravnu cestu k suboru!" >&2
+        exit 1
+fi
+
+#ak je adresar platny priradi ho do premennej DIR
+if [ -d "$*" ]; then
+        DIR=$*  #directory == true
+fi
+
+if [ "$NORMALIZATION" = true ]; then
+	if [ -t 1 ]; then
+		RIADOK=$(($(tput cols) - 13))
+	else
+               RIADOK=79
+	fi
+fi
+
+#Spocitanie mnozstva ciest a suborov
+ERROR=$(find $DIR -type d 2>&1 | grep -E -v "$IGNORE" | wc -l)
+DIRECTIVES=$(find $DIR -type d | grep -E -v "$IGNORE" | wc -l)
+FILES=$(find $DIR -type f | grep -E -v "$IGNORE" | wc -l)
+
+if [ "$ERROR" -gt "$DIRECTIVES" ]; then
+	echo "Cesta, kroru si zadal nema opravnenia na vsetky subory" >&2
+	exit 1
+fi
+
+#Pri argumente i ak bude root
+if [ "$DIRECTIVES" -eq 0 ]; then
+        echo "Cesta, ktoru si zadal je prazdna" >&2
+        exit 1
+fi
+
+#Spocitanie mnozstva suborov pre jednotlive velkosti
+KAT1=$(find $DIR -type f -size -100c | grep -E -v "$IGNORE" | wc -l)
+KAT2=$(find $DIR -type f -size +99c -size -1024c | grep -E -v "$IGNORE" | wc -l)
+KAT3=$(find $DIR -type f -size +1023c -size -10240c | grep -E -v "$IGNORE" | wc -l)
+KAT4=$(find $DIR -type f -size +10239c -size -102400c | grep -E -v "$IGNORE" | wc -l)
+KAT5=$(find $DIR -type f -size +102400c -size -10485776c | grep -E -v "$IGNORE" | wc -l)
+KAT6=$(find $DIR -type f -size +1048575c -size -10485760c | grep -E -v "$IGNORE" | wc -l)
+KAT7=$(find $DIR -type f -size +10485759c -size -104857600c | grep -E -v "$IGNORE" | wc -l)
+KAT8=$(find $DIR -type f -size +104857599c -size -1073741824c | grep -E -v "$IGNORE" | wc -l)
+KAT9=$(find $DIR -type f -size +1073741823c | grep -E -v "$IGNORE" | wc -l)
+
+printHash()
+{
+        i=0
+	while [ "$i" -lt "$1" ]; do
+
+                printf "#"
+                i=$((i+1))
+		
+		if [ "$NORMALIZATION" = true ]; then
+			if [ "$i" -eq "$RIADOK" ]; then
+				break
+			fi
+		fi
+        done
+}
+
+echo "Root directory: $DIR"
+echo "Directories: $DIRECTIVES"
+echo "All files: $FILES"
+echo "File size histogram:"
+printf "  <100 B  : `printHash $KAT1`\n"
+printf "  <1 KiB  : `printHash $KAT2`\n"
+printf "  <10 KiB : `printHash $KAT3`\n"
+printf "  <100 KiB: `printHash $KAT4`\n"
+printf "  <1 MiB  : `printHash $KAT5`\n"
+printf "  <10 MiB : `printHash $KAT6`\n"
+printf "  <100 MiB: `printHash $KAT7`\n"
+printf "  <1 GiB  : `printHash $KAT8`\n"
+printf "  >=1 GiB : `printHash $KAT9`\n"
